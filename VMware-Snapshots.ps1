@@ -57,25 +57,47 @@ $vCenters = @(
     "vmwvcsttapha01.edificios.gfbanorte"
 )
 
+# Log file path
+$logFilePath = "$env:USERPROFILE\Desktop\SnapshotManagementLog.txt"
+
+# Function to log messages
+function Log-Message {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Message
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] $Message"
+    Add-Content -Path $logFilePath -Value $logEntry
+    Write-Host $logEntry
+}
+
 # Function to select vCenter
 function Select-vCenter {
-    Write-Host "Select a vCenter to connect to:"
-    for ($i = 0; $i -lt $vCenters.Length; $i++) {
-        Write-Host "$($i + 1). $($vCenters[$i])"
-    }
-    $selection = Read-Host "Enter the number of the vCenter"
-    if ($selection -ge 1 -and $selection -le $vCenters.Length) {
-        return $vCenters[$selection - 1]
-    } else {
-        Write-Host "Invalid selection. Exiting script."
-        exit
+    while ($true) {
+        Write-Host "Select a vCenter to connect to:"
+        for ($i = 0; $i -lt $vCenters.Length; $i++) {
+            Write-Host "$($i + 1). $($vCenters[$i])"
+        }
+        $selection = Read-Host "Enter the number of the vCenter"
+        if ($selection -ge 1 -and $selection -le $vCenters.Length) {
+            return $vCenters[$selection - 1]
+        } else {
+            Write-Host "Invalid selection. Please enter a number between 1 and $($vCenters.Length)."
+        }
     }
 }
 
 # Connect to selected vCenter Server
 $vCenterServer = Select-vCenter
 $credential = Get-Credential
-Connect-VIServer -Server $vCenterServer -Credential $credential
+try {
+    Connect-VIServer -Server $vCenterServer -Credential $credential -ErrorAction Stop
+    Log-Message "Connected to vCenter: $vCenterServer"
+} catch {
+    Log-Message "Failed to connect to vCenter: $vCenterServer. Error: $_"
+    exit
+}
 
 # Function to take snapshots
 function Take-VMSnapshot {
@@ -89,12 +111,12 @@ function Take-VMSnapshot {
     )
 
     foreach ($vmName in $VMNames) {
-        $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
-        if ($vm) {
-            New-Snapshot -VM $vm -Name $SnapshotName -Description $SnapshotDescription -Confirm:$false
-            Write-Host "Snapshot taken for VM: $vmName"
-        } else {
-            Write-Host "VM not found: $vmName"
+        try {
+            $vm = Get-VM -Name $vmName -ErrorAction Stop
+            New-Snapshot -VM $vm -Name $SnapshotName -Description $SnapshotDescription -Confirm:$false -ErrorAction Stop
+            Log-Message "Snapshot taken for VM: $vmName"
+        } catch {
+            Log-Message "Failed to take snapshot for VM: $vmName. Error: $_"
         }
     }
 }
@@ -107,17 +129,17 @@ function Remove-LastSnapshot {
     )
 
     foreach ($vmName in $VMNames) {
-        $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
-        if ($vm) {
-            $lastSnapshot = Get-Snapshot -VM $vm | Sort-Object Created -Descending | Select-Object -First 1
+        try {
+            $vm = Get-VM -Name $vmName -ErrorAction Stop
+            $lastSnapshot = Get-Snapshot -VM $vm | Sort-Object Created -Descending | Select-Object -First 1 -ErrorAction Stop
             if ($lastSnapshot) {
-                Remove-Snapshot -Snapshot $lastSnapshot -Confirm:$false
-                Write-Host "Last snapshot deleted for VM: $vmName"
+                Remove-Snapshot -Snapshot $lastSnapshot -Confirm:$false -ErrorAction Stop
+                Log-Message "Last snapshot deleted for VM: $vmName"
             } else {
-                Write-Host "No snapshots found for VM: $vmName"
+                Log-Message "No snapshots found for VM: $vmName"
             }
-        } else {
-            Write-Host "VM not found: $vmName"
+        } catch {
+            Log-Message "Failed to delete last snapshot for VM: $vmName. Error: $_"
         }
     }
 }
@@ -130,17 +152,17 @@ function Remove-AllSnapshots {
     )
 
     foreach ($vmName in $VMNames) {
-        $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
-        if ($vm) {
-            $snapshots = Get-Snapshot -VM $vm
+        try {
+            $vm = Get-VM -Name $vmName -ErrorAction Stop
+            $snapshots = Get-Snapshot -VM $vm -ErrorAction Stop
             if ($snapshots) {
-                Remove-Snapshot -Snapshot $snapshots -Confirm:$false
-                Write-Host "All snapshots deleted for VM: $vmName"
+                Remove-Snapshot -Snapshot $snapshots -Confirm:$false -ErrorAction Stop
+                Log-Message "All snapshots deleted for VM: $vmName"
             } else {
-                Write-Host "No snapshots found for VM: $vmName"
+                Log-Message "No snapshots found for VM: $vmName"
             }
-        } else {
-            Write-Host "VM not found: $vmName"
+        } catch {
+            Log-Message "Failed to delete all snapshots for VM: $vmName. Error: $_"
         }
     }
 }
@@ -153,22 +175,22 @@ function Remove-SelectedSnapshots {
     )
 
     foreach ($vmName in $VMNames) {
-        $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
-        if ($vm) {
-            $snapshots = Get-Snapshot -VM $vm
+        try {
+            $vm = Get-VM -Name $vmName -ErrorAction Stop
+            $snapshots = Get-Snapshot -VM $vm -ErrorAction Stop
             if ($snapshots) {
                 $selectedSnapshots = $snapshots | Out-GridView -Title "Select Snapshots to Delete for VM: $vmName" -PassThru
                 if ($selectedSnapshots) {
-                    Remove-Snapshot -Snapshot $selectedSnapshots -Confirm:$false
-                    Write-Host "Selected snapshots deleted for VM: $vmName"
+                    Remove-Snapshot -Snapshot $selectedSnapshots -Confirm:$false -ErrorAction Stop
+                    Log-Message "Selected snapshots deleted for VM: $vmName"
                 } else {
-                    Write-Host "No snapshots selected for VM: $vmName"
+                    Log-Message "No snapshots selected for VM: $vmName"
                 }
             } else {
-                Write-Host "No snapshots found for VM: $vmName"
+                Log-Message "No snapshots found for VM: $vmName"
             }
-        } else {
-            Write-Host "VM not found: $vmName"
+        } catch {
+            Log-Message "Failed to delete selected snapshots for VM: $vmName. Error: $_"
         }
     }
 }
@@ -184,7 +206,7 @@ function Get-CSVFilePath {
     if ($fileDialog.ShowDialog() -eq 'OK') {
         return $fileDialog.FileName
     } else {
-        Write-Host "No file selected. Exiting script."
+        Log-Message "No file selected. Exiting script."
         Disconnect-VIServer -Confirm:$false
         exit
     }
@@ -199,29 +221,46 @@ function Select-VMsFromList {
 
 # Main script logic
 do {
-    Write-Host "Select an action to perform:"
-    Write-Host "1. Take Snapshots"
-    Write-Host "2. Delete the Last Snapshot"
-    Write-Host "3. Delete All Snapshots"
-    Write-Host "4. Delete Selected Snapshots"
-    $action = Read-Host "Enter your choice (1, 2, 3, or 4)"
+    # Action selection
+    while ($true) {
+        Write-Host "Select an action to perform:"
+        Write-Host "1. Take Snapshots"
+        Write-Host "2. Delete the Last Snapshot"
+        Write-Host "3. Delete All Snapshots"
+        Write-Host "4. Delete Selected Snapshots"
+        $action = Read-Host "Enter your choice (1, 2, 3, or 4)"
+        if ($action -in 1..4) {
+            break
+        } else {
+            Write-Host "Invalid choice. Please enter a number between 1 and 4."
+        }
+    }
 
-    Write-Host "Select an option to choose VMs:"
-    Write-Host "1. Provide a CSV list with VM names"
-    Write-Host "2. Select VMs from a popup window list"
-    $option = Read-Host "Enter your choice (1 or 2)"
+    # VM selection
+    while ($true) {
+        Write-Host "Select an option to choose VMs:"
+        Write-Host "1. Provide a CSV list with VM names"
+        Write-Host "2. Select VMs from a popup window list"
+        $option = Read-Host "Enter your choice (1 or 2)"
+        if ($option -in 1..2) {
+            break
+        } else {
+            Write-Host "Invalid choice. Please enter 1 or 2."
+        }
+    }
 
     if ($option -eq 1) {
         # Option 1: Provide a CSV list with VM names
         $csvPath = Get-CSVFilePath
-        $vmNames = Import-Csv -Path $csvPath | Select-Object -ExpandProperty VMName
+        try {
+            $vmNames = Import-Csv -Path $csvPath | Select-Object -ExpandProperty VMName -ErrorAction Stop
+        } catch {
+            Log-Message "Failed to read CSV file. Please ensure the file is valid and contains a 'VMName' column."
+            continue
+        }
     } elseif ($option -eq 2) {
         # Option 2: Select VMs from a popup window list
         $vmNames = Select-VMsFromList
-    } else {
-        Write-Host "Invalid option selected. Exiting script."
-        Disconnect-VIServer -Confirm:$false
-        exit
     }
 
     if ($vmNames.Count -gt 0) {
@@ -240,17 +279,22 @@ do {
             4 {
                 Remove-SelectedSnapshots -VMNames $vmNames
             }
-            default {
-                Write-Host "Invalid action selected. Exiting script."
-            }
         }
     } else {
-        Write-Host "No VMs selected. Exiting script."
+        Log-Message "No VMs selected."
     }
 
     # Ask if another action is needed
-    $anotherAction = Read-Host "Do you want to perform another action? (yes/no)"
+    while ($true) {
+        $anotherAction = Read-Host "Do you want to perform another action? (yes/no)"
+        if ($anotherAction -in "yes", "no") {
+            break
+        } else {
+            Write-Host "Invalid input. Please enter 'yes' or 'no'."
+        }
+    }
 } while ($anotherAction -eq "yes")
 
 # Disconnect from vCenter Server
 Disconnect-VIServer -Confirm:$false
+Log-Message "Disconnected from vCenter: $vCenterServer"
