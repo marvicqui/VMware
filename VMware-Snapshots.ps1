@@ -145,6 +145,34 @@ function Remove-AllSnapshots {
     }
 }
 
+# Function to delete selected snapshots
+function Remove-SelectedSnapshots {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string[]]$VMNames
+    )
+
+    foreach ($vmName in $VMNames) {
+        $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+        if ($vm) {
+            $snapshots = Get-Snapshot -VM $vm
+            if ($snapshots) {
+                $selectedSnapshots = $snapshots | Out-GridView -Title "Select Snapshots to Delete for VM: $vmName" -PassThru
+                if ($selectedSnapshots) {
+                    Remove-Snapshot -Snapshot $selectedSnapshots -Confirm:$false
+                    Write-Host "Selected snapshots deleted for VM: $vmName"
+                } else {
+                    Write-Host "No snapshots selected for VM: $vmName"
+                }
+            } else {
+                Write-Host "No snapshots found for VM: $vmName"
+            }
+        } else {
+            Write-Host "VM not found: $vmName"
+        }
+    }
+}
+
 # Function to open file explorer and select CSV file
 function Get-CSVFilePath {
     Add-Type -AssemblyName System.Windows.Forms
@@ -170,50 +198,59 @@ function Select-VMsFromList {
 }
 
 # Main script logic
-Write-Host "Select an action to perform:"
-Write-Host "1. Take Snapshots"
-Write-Host "2. Delete the Last Snapshot"
-Write-Host "3. Delete All Snapshots"
-$action = Read-Host "Enter your choice (1, 2, or 3)"
+do {
+    Write-Host "Select an action to perform:"
+    Write-Host "1. Take Snapshots"
+    Write-Host "2. Delete the Last Snapshot"
+    Write-Host "3. Delete All Snapshots"
+    Write-Host "4. Delete Selected Snapshots"
+    $action = Read-Host "Enter your choice (1, 2, 3, or 4)"
 
-Write-Host "Select an option to choose VMs:"
-Write-Host "1. Provide a CSV list with VM names"
-Write-Host "2. Select VMs from a popup window list"
-$option = Read-Host "Enter your choice (1 or 2)"
+    Write-Host "Select an option to choose VMs:"
+    Write-Host "1. Provide a CSV list with VM names"
+    Write-Host "2. Select VMs from a popup window list"
+    $option = Read-Host "Enter your choice (1 or 2)"
 
-if ($option -eq 1) {
-    # Option 1: Provide a CSV list with VM names
-    $csvPath = Get-CSVFilePath
-    $vmNames = Import-Csv -Path $csvPath | Select-Object -ExpandProperty VMName
-} elseif ($option -eq 2) {
-    # Option 2: Select VMs from a popup window list
-    $vmNames = Select-VMsFromList
-} else {
-    Write-Host "Invalid option selected. Exiting script."
-    Disconnect-VIServer -Confirm:$false
-    exit
-}
-
-if ($vmNames.Count -gt 0) {
-    switch ($action) {
-        1 {
-            $snapshotName = Read-Host "Enter the snapshot name"
-            $snapshotDescription = Read-Host "Enter the snapshot description"
-            Take-VMSnapshot -VMNames $vmNames -SnapshotName $snapshotName -SnapshotDescription $snapshotDescription
-        }
-        2 {
-            Remove-LastSnapshot -VMNames $vmNames
-        }
-        3 {
-            Remove-AllSnapshots -VMNames $vmNames
-        }
-        default {
-            Write-Host "Invalid action selected. Exiting script."
-        }
+    if ($option -eq 1) {
+        # Option 1: Provide a CSV list with VM names
+        $csvPath = Get-CSVFilePath
+        $vmNames = Import-Csv -Path $csvPath | Select-Object -ExpandProperty VMName
+    } elseif ($option -eq 2) {
+        # Option 2: Select VMs from a popup window list
+        $vmNames = Select-VMsFromList
+    } else {
+        Write-Host "Invalid option selected. Exiting script."
+        Disconnect-VIServer -Confirm:$false
+        exit
     }
-} else {
-    Write-Host "No VMs selected. Exiting script."
-}
+
+    if ($vmNames.Count -gt 0) {
+        switch ($action) {
+            1 {
+                $snapshotName = Read-Host "Enter the snapshot name"
+                $snapshotDescription = Read-Host "Enter the snapshot description"
+                Take-VMSnapshot -VMNames $vmNames -SnapshotName $snapshotName -SnapshotDescription $snapshotDescription
+            }
+            2 {
+                Remove-LastSnapshot -VMNames $vmNames
+            }
+            3 {
+                Remove-AllSnapshots -VMNames $vmNames
+            }
+            4 {
+                Remove-SelectedSnapshots -VMNames $vmNames
+            }
+            default {
+                Write-Host "Invalid action selected. Exiting script."
+            }
+        }
+    } else {
+        Write-Host "No VMs selected. Exiting script."
+    }
+
+    # Ask if another action is needed
+    $anotherAction = Read-Host "Do you want to perform another action? (yes/no)"
+} while ($anotherAction -eq "yes")
 
 # Disconnect from vCenter Server
 Disconnect-VIServer -Confirm:$false
