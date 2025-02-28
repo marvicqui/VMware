@@ -195,6 +195,28 @@ function Remove-SelectedSnapshots {
     }
 }
 
+# Function to restart the guest OS of VMs
+function Restart-GuestOS {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string[]]$VMNames
+    )
+
+    foreach ($vmName in $VMNames) {
+        try {
+            $vm = Get-VM -Name $vmName -ErrorAction Stop
+            if ($vm.ExtensionData.Guest.ToolsRunningStatus -eq "guestToolsRunning") {
+                Restart-VMGuest -VM $vm -Confirm:$false -ErrorAction Stop
+                Log-Message "Guest OS restart initiated for VM: $vmName"
+            } else {
+                Log-Message "VMware Tools is not running on VM: $vmName. Cannot restart guest OS."
+            }
+        } catch {
+            Log-Message "Failed to restart guest OS for VM: $vmName. Error: $_"
+        }
+    }
+}
+
 # Function to open file explorer and select CSV file
 function Get-CSVFilePath {
     Add-Type -AssemblyName System.Windows.Forms
@@ -228,11 +250,12 @@ do {
         Write-Host "2. Delete the Last Snapshot"
         Write-Host "3. Delete All Snapshots"
         Write-Host "4. Delete Selected Snapshots"
-        $action = Read-Host "Enter your choice (1, 2, 3, or 4)"
-        if ($action -in 1..4) {
+        Write-Host "5. Restart Guest OS"
+        $action = Read-Host "Enter your choice (1, 2, 3, 4, or 5)"
+        if ($action -in 1..5) {
             break
         } else {
-            Write-Host "Invalid choice. Please enter a number between 1 and 4."
+            Write-Host "Invalid choice. Please enter a number between 1 and 5."
         }
     }
 
@@ -278,6 +301,9 @@ do {
             }
             4 {
                 Remove-SelectedSnapshots -VMNames $vmNames
+            }
+            5 {
+                Restart-GuestOS -VMNames $vmNames
             }
         }
     } else {
