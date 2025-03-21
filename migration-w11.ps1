@@ -5,7 +5,7 @@ function Show-Menu {
     Write-Host "=================================="
     Write-Host "1. Connect to vCenter"
     Write-Host "2. Clone VM"
-    Write-Host "3. Disconnect vNIC"
+    Write-Host "3. Set VLAND2067 and disconnect vNIC"
     Write-Host "4. Connect vNIC"
     Write-Host "5. Rename Computer"
     Write-Host "6. Set Password for CtxAdmin2"
@@ -70,7 +70,7 @@ while ($continue) {
                 continue
             }
 
-            Write-Host "Disconnecting vNIC..."
+            Write-Host "Disconnecting vNIC and setting VLAN VDI_Terceros_2067..."
             $vmName = Read-Host "Please enter the name of the VM to configure"
 
             try {
@@ -118,7 +118,7 @@ while ($continue) {
             }
 
             Write-Host "Renaming computer..."
-            $vmName = Read-Host "Please enter the name of the VM to configure"
+            $vmName = Read-Host "Please enter the name of the VM to configure, it will be the new computer name"
 
             try {
                 $vm = Get-VM -Name $vmName -ErrorAction Stop
@@ -129,7 +129,7 @@ while ($continue) {
                 $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
                 $guestCredential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
 
-                $newComputerName = Read-Host "Please enter the new computer name for VM '$vmName'"
+                $newComputerName = $vmName
                 
                 if ($vm.PowerState -ne "PoweredOn") {
                     Write-Host "Powering on VM '$vmName'..."
@@ -140,15 +140,15 @@ while ($continue) {
                 $guestScript = @"
                 Remove-Computer -Force -PassThru
                 Rename-Computer -NewName "$newComputerName" -Force
-                Write-Output "Computer name set to $newComputerName and joined workgroup $workgroupName. Rebooting now..."
+                Write-Output "Computer name set to $newComputerName. Rebooting now..."
                 Restart-Computer -Force
-                "@
+"@
 
                 Write-Host "Applying computer name and workgroup changes to VM '$vmName'..."
                 $result = Invoke-VMScript -VM $vm -ScriptText $guestScript -GuestCredential $guestCredential -ScriptType PowerShell -ErrorAction Stop
                 Write-Host "Script output: $($result.ScriptOutput)"
-                Write-Host "VM '$vmName' has been configured with the new computer name '$newComputerName'.'. The VM is rebooting to apply changes."
-                Write-Host "Note: The computer object for '$vmName' may still exist in Active Directory. Please manually remove it from the domain to avoid stale entries."
+                Write-Host "VM '$vmName' has been configured with the new computer name '$newComputerName' '. The VM is rebooting to apply changes."
+                
             }
             catch {
                 Write-Host "Error renaming computer: $_"
