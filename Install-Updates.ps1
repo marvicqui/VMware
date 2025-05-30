@@ -1,6 +1,7 @@
 ﻿# --- BEGIN SCRIPT --- 
 # Load required .NET assembly for the File Open dialog 
 Add-Type -AssemblyName System.Windows.Forms 
+
 # Open a File Explorer window to select the CSV file containing the server list. 
 $openFileDialog = New-Object System.Windows.Forms.OpenFileDialog 
 $openFileDialog.Filter = "CSV Files (*.csv)|*.csv" 
@@ -10,6 +11,7 @@ if ($openFileDialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
 } 
 $csvPath = $openFileDialog.FileName 
 $servers = Import-Csv -Path $csvPath 
+
 # Function: Copy update files to each server (using the administrative share on drive D) 
 function Copy-UpdatesFiles { 
     param ( 
@@ -19,7 +21,7 @@ function Copy-UpdatesFiles {
         $serverName = $server.ServerName 
         Write-Host "Copying update files to $serverName ..." 
         # Destination folder on remote server 
-        $destination = "\\$serverName\E$\Updates" 
+        <span class="math-inline">destination \= "\\\\$serverName\\E</span>\Updates" 
         # Create destination folder if it doesn't exist 
         Invoke-Command -ComputerName $serverName -ScriptBlock { 
             param($dest) 
@@ -32,6 +34,7 @@ function Copy-UpdatesFiles {
         Write-Host "Update files copied to $serverName" 
     } 
 } 
+
 # Function: Remotely install updates on selected servers (assumes updates are .msu files in D:\Updates) 
 function Install-Updates-Selected { 
     Write-Host "Select the servers to install updates:" -ForegroundColor Cyan 
@@ -43,7 +46,7 @@ function Install-Updates-Selected {
         $selectedServers = $servers 
     } 
     else { 
-        $indices = $selection -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "^\d+$" } | ForEach-Object { [int]$_ } 
+        $indices = $selection -split "," | ForEach-Object { $_.Trim() } | Where-Object { <span class="math-inline">\_ \-match "^\\d\+</span>" } | ForEach-Object { [int]$_ } 
         $selectedServers = @() 
         foreach ($i in $indices) { 
             if ($i -ge 0 -and $i -lt $servers.Count) { 
@@ -65,6 +68,7 @@ function Install-Updates-Selected {
         Write-Host "Update installation command sent to $serverName" 
     } 
 } 
+
 # Function: Check update installation status with colored output and latest KB installed.
 function Check-UpdatesInstallationStatus {
     foreach ($server in $servers) {
@@ -136,6 +140,7 @@ function Enable-Start-Service {
         } 
     } 
 } 
+
 # Function: Stop and disable a specified service using WMI. 
 function Stop-Disable-Service { 
     param( 
@@ -160,6 +165,7 @@ function Stop-Disable-Service {
         } 
     } 
 } 
+
 # Function: Reboot the selected remote servers (instead of all at once) 
 function Reboot-SelectedServers { 
     Write-Host "Select the servers to reboot:" -ForegroundColor Cyan 
@@ -171,7 +177,7 @@ function Reboot-SelectedServers {
         $selectedServers = $servers 
     } 
     else { 
-        $indices = $selection -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "^\d+$" } | ForEach-Object { [int]$_ } 
+        $indices = $selection -split "," | ForEach-Object { $_.Trim() } | Where-Object { <span class="math-inline">\_ \-match "^\\d\+</span>" } | ForEach-Object { [int]$_ } 
         $selectedServers = @() 
         foreach ($i in $indices) { 
             if ($i -ge 0 -and $i -lt $servers.Count) { 
@@ -195,6 +201,7 @@ function Reboot-SelectedServers {
         } 
     } 
 } 
+
 # Function: Check if the remote server is online (using ping). 
 function Check-ServerStatus { 
     foreach ($server in $servers) { 
@@ -249,7 +256,7 @@ function Check-CDriveSpace {
             }
             
             Write-Host "$serverName : C: Drive Space" -ForegroundColor $color
-            Write-Host "  Free: $($driveInfo.FreeGB) GB / $($driveInfo.TotalGB) GB ($($driveInfo.PercentFree)% free)" -ForegroundColor $color
+            Write-Host "  Free: $($driveInfo.FreeGB) GB / $(<span class="math-inline">driveInfo\.TotalGB\) GB \(</span>($driveInfo.PercentFree)% free)" -ForegroundColor $color
             
         } catch {
             Write-Host ""  # New line after the "Checking..." message
@@ -273,7 +280,7 @@ function Remove-OldSecurityLogs {
     if ($selection -eq "all") {
         $selectedServers = $servers
     } else {
-        $indices = $selection -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "^\d+$" } | ForEach-Object { [int]$_ }
+        $indices = $selection -split "," | ForEach-Object { $_.Trim() } | Where-Object { <span class="math-inline">\_ \-match "^\\d\+</span>" } | ForEach-Object { [int]$_ }
         $selectedServers = @()
         foreach ($i in $indices) {
             if ($i -ge 0 -and $i -lt $servers.Count) {
@@ -341,7 +348,7 @@ function Check-EdgeVersion {
     if ($selection -eq "all") {
         $selectedServers = $servers
     } else {
-        $indices = $selection -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "^\d+$" } | ForEach-Object { [int]$_ }
+        $indices = $selection -split "," | ForEach-Object { $_.Trim() } | Where-Object { <span class="math-inline">\_ \-match "^\\d\+</span>" } | ForEach-Object { [int]$_ }
         $selectedServers = @()
         foreach ($i in $indices) {
             if ($i -ge 0 -and $i -lt $servers.Count) {
@@ -374,7 +381,7 @@ function Check-EdgeVersion {
                     } else {
                         # Get first directory that looks like a version number
                         $versionFolders = Get-ChildItem -Path $edgePath -Directory | 
-                                         Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } | 
+                                         Where-Object { <span class="math-inline">\_\.Name \-match '^\\d\+\\\.\\d\+\\\.\\d\+\\\.\\d\+</span>' } | 
                                          Sort-Object Name -Descending
                         if ($versionFolders.Count -gt 0) {
                             $version = $versionFolders[0].Name
@@ -411,7 +418,7 @@ function Check-EdgeVersion {
                             }
                         } else {
                             $versionFolders = Get-ChildItem -Path $edgePath -Directory | 
-                                             Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } | 
+                                             Where-Object { <span class="math-inline">\_\.Name \-match '^\\d\+\\\.\\d\+\\\.\\d\+\\\.\\d\+</span>' } | 
                                              Sort-Object Name -Descending
                             if ($versionFolders.Count -gt 0) {
                                 $version = $versionFolders[0].Name
@@ -470,175 +477,4 @@ function Update-Edge {
     for ($i = 0; $i -lt $servers.Count; $i++) {
         Write-Host "[$i] $($servers[$i].ServerName)"
     }
-    $selection = Read-Host "Enter the indices separated by commas (e.g., 0,2,3) or type 'all' to update all servers"
-    
-    if ($selection -eq "all") {
-        $selectedServers = $servers
-    } else {
-        $indices = $selection -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "^\d+$" } | ForEach-Object { [int]$_ }
-        $selectedServers = @()
-        foreach ($i in $indices) {
-            if ($i -ge 0 -and $i -lt $servers.Count) {
-                $selectedServers += $servers[$i]
-            } else {
-                Write-Host "Index $i is out of range. Skipping..." -ForegroundColor Yellow
-            }
-        }
-    }
-    
-    # Look for Edge MSI files in the D:\Updates folder on each server
-    foreach ($server in $selectedServers) {
-        $serverName = $server.ServerName
-        Write-Host "Checking for Edge MSI on $serverName ..." -NoNewline
-        
-        try {
-            $updateResult = Invoke-Command -ComputerName $serverName -ScriptBlock {
-                $updateFolder = "D:\Updates"
-                
-                # Check if the updates folder exists
-                if (-not (Test-Path $updateFolder)) {
-                    return @{
-                        Status = "Error"
-                        Message = "Updates folder not found at D:\Updates"
-                    }
-                }
-                
-                # Find Edge MSI files
-                $edgeMsiFiles = Get-ChildItem -Path $updateFolder -Filter "*edge*.msi" -File
-                
-                if ($edgeMsiFiles.Count -eq 0) {
-                    return @{
-                        Status = "Error"
-                        Message = "No Edge MSI files found in D:\Updates"
-                    }
-                }
-                
-                # Find the newest Edge MSI file
-                $newestEdgeMsi = $edgeMsiFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-                
-                # Install Edge using the MSI
-                try {
-                    $installProcess = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$($newestEdgeMsi.FullName)`" /qn /norestart" -Wait -PassThru -NoNewWindow
-                    
-                    if ($installProcess.ExitCode -eq 0) {
-                        return @{
-                            Status = "Success"
-                            Message = "Edge successfully updated using $($newestEdgeMsi.Name)"
-                            ExitCode = $installProcess.ExitCode
-                        }
-                    } else {
-                        return @{
-                            Status = "Error"
-                            Message = "Edge installation failed"
-                            MsiFile = $newestEdgeMsi.Name
-                            ExitCode = $installProcess.ExitCode
-                        }
-                    }
-                } catch {
-                    return @{
-                        Status = "Error"
-                        Message = "Error executing MSI: $_"
-                        MsiFile = $newestEdgeMsi.Name
-                    }
-                }
-            }
-            
-            Write-Host ""  # New line after the "Checking..." message
-            
-            if ($updateResult.Status -eq "Success") {
-                Write-Host "$serverName : $($updateResult.Message)" -ForegroundColor Green
-            } else {
-                Write-Host "$serverName : $($updateResult.Message)" -ForegroundColor Red
-                if ($updateResult.ContainsKey("MsiFile")) {
-                    Write-Host "  MSI File: $($updateResult.MsiFile)" -ForegroundColor Yellow
-                }
-                if ($updateResult.ContainsKey("ExitCode")) {
-                    Write-Host "  Exit Code: $($updateResult.ExitCode)" -ForegroundColor Yellow
-                }
-            }
-            
-        } catch {
-            Write-Host ""  # New line after the "Checking..." message
-            Write-Host "$serverName : Failed to update Edge. $_" -ForegroundColor Red
-        }
-        
-        Write-Host "-----------------------------------------"
-    }
-}
-
-# --- Main Menu Loop ---
-do {
-    Write-Host ""
-    Write-Host "==================== MENU ===================="
-    Write-Host "1. Copy Updates Files"
-    Write-Host "2. Install Updates (Selected Servers)"
-    Write-Host "3. Check Updates Installation Status"
-    Write-Host "4. Enable and Start Windows Update Service"
-    Write-Host "5. Stop and Disable Windows Update Service"
-    Write-Host "6. Enable and Start WinRM Service (WMI)"
-    Write-Host "7. Stop and Disable WinRM Service (WMI)"
-    Write-Host "8. Reboot Selected Servers"
-    Write-Host "9. Check Server Status"
-    Write-Host "10. Check C: Drive Space"
-    Write-Host "11. Clean Old Security Logs (3+ months)"
-    Write-Host "12. Check Edge Version"                       # New option
-    Write-Host "13. Update Edge"                              # New option
-    Write-Host "14. Quit"                                     # Changed from 12 to 14
-    Write-Host "=============================================="
-    $choice = Read-Host "Enter your choice (1-14)"            # Updated range
-    
-    switch ($choice) {
-        "1" {
-            $sourceFolder = Read-Host "Enter the folder path containing the update files (e.g., D:\Updates)"
-            Copy-UpdatesFiles -sourceFolder $sourceFolder
-        }
-        "2" {
-            Install-Updates-Selected
-        }
-        "3" {
-            Check-UpdatesInstallationStatus
-        }
-        "4" {
-            Enable-Start-Service -serviceName "wuauserv"
-        }
-        "5" {
-            Stop-Disable-Service -serviceName "wuauserv"
-        }
-        "6" {
-            Enable-Start-Service -serviceName "WinRM"
-        }
-        "7" {
-            Stop-Disable-Service -serviceName "WinRM"
-        }
-        "8" {
-            Reboot-SelectedServers
-        }
-        "9" {
-            Check-ServerStatus
-        }
-        "10" {
-            Check-CDriveSpace
-        }
-        "11" {
-            Remove-OldSecurityLogs
-        }
-        "12" {                                              # New option
-            Check-EdgeVersion
-        }
-        "13" {                                              # New option
-            Update-Edge
-        }
-        "14" {                                              # Changed from 12 to 14
-            Write-Host "Exiting..."
-            break
-        }
-        default {
-            Write-Host "Invalid option. Please try again."
-        }
-    }
-    
-    if ($choice -ne "14") {                                # Changed from 12 to 14
-        $another = Read-Host "Do you want to perform another action? (Y/N)"
-    }
-} while (($another -eq "Y" -or $another -eq "y") -and $choice -ne "14") # Changed from 12 to 14
-# --- END SCRIPT --- 
+    $selection = Read-Host "Enter the indices separated by commas (e.g., 0,2,3
