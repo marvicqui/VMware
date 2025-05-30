@@ -1,6 +1,5 @@
 # Function to display the menu
 function Show-Menu {
-    Clear-Host
     Write-Host "=================================="
     Write-Host "PowerCLI VM Management Menu"
     Write-Host "=================================="
@@ -12,37 +11,11 @@ function Show-Menu {
     Write-Host "6. Set Password for CtxAdmin2"
     Write-Host "7. Start VM"
     Write-Host "8. Extend Partition"
-    Write-Host "9. Quit"
+    Write-Host "9. Create Local User ugsop_vdiha"
+    Write-Host "10. Quit"
     Write-Host "=================================="
-    
-    # Show connection status
-    if ($global:DefaultVIServer) {
-        Write-Host "Connected to: $($global:DefaultVIServer.Name)" -ForegroundColor Green
-    } else {
-        Write-Host "Not connected to vCenter" -ForegroundColor Yellow
-    }
-    Write-Host "=================================="
-    
-    $choice = Read-Host "Please select an option (1-9)"
+    $choice = Read-Host "Please select an option (1-10)"
     return $choice
-}
-
-# Function to pause and wait for user input before returning to menu
-function Wait-ForUser {
-    param([string]$Message = "Press any key to return to menu...")
-    Write-Host ""
-    Write-Host $Message -ForegroundColor Cyan
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-}
-
-# Function to validate vCenter connection
-function Test-VCenterConnection {
-    if (-not $global:DefaultVIServer) {
-        Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)." -ForegroundColor Red
-        Wait-ForUser
-        return $false
-    }
-    return $true
 }
 
 # Main script loop
@@ -53,62 +26,70 @@ while ($continue) {
     switch ($choice) {
         "1" {
             # 1. Connect to vCenter
-            Write-Host "Connecting to vCenter..." -ForegroundColor Yellow
-            $vCenterServer = Read-Host "Please enter the vCenter server address"
-            $vCenterCredential = Get-Credential -Message "Enter your vCenter credentials"
+            Write-Host "Connecting to vCenter..."
+            #$vCenterServer = Read-Host "Please enter the vCenter server address"
+            $vCenterServer = "vmwvcsttapha01.edificios.gfbanorte"
+            #$vCenterCredential = Get-Credential -Message "Enter your vCenter credentials"
             try {
-                Connect-VIServer -Server $vCenterServer -Credential $vCenterCredential -ErrorAction Stop
-                Write-Host "Successfully connected to vCenter: $vCenterServer" -ForegroundColor Green
+                #Connect-VIServer -Server $vCenterServer -Credential $vCenterCredential -ErrorAction Stop
+                $vcenterConnection = Connect-VIServer -Server $vCenterServer -user hviqm800@vsphere.local -pass Passw0rd.1 -ErrorAction Stop
+                Write-Host "Successfully connected to vCenter: $vCenterServer"
             }
             catch {
-                Write-Host "Error connecting to vCenter: $_" -ForegroundColor Red
+                Write-Host "Error connecting to vCenter: $_"
             }
-            Wait-ForUser
         }
 
         "2" {
             # 2. Clone VM
-            if (-not (Test-VCenterConnection)) { continue }
+            if (-not $global:DefaultVIServer) {
+                Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)."
+                continue
+            }
 
-            Write-Host "Cloning VM..." -ForegroundColor Yellow
+            Write-Host "Cloning VM..."
             $sourceVMName = Read-Host "Please enter the name of the source VM to clone"
             $newVMName = Read-Host "Please enter the name for the new VM"
 
             try {
                 $sourceVM = Get-VM -Name $sourceVMName -ErrorAction Stop
                 $newVM = New-VM -VM $sourceVM -Name $newVMName -VMHost $sourceVM.VMHost -Datastore "VMsRecursosTercerosHA" -ErrorAction Stop
-                Write-Host "VM '$newVMName' has been cloned successfully from '$sourceVMName'." -ForegroundColor Green
+                Write-Host "VM '$newVMName' has been cloned successfully from '$sourceVMName'."
             }
             catch {
-                Write-Host "Error cloning VM: $_" -ForegroundColor Red
+                Write-Host "Error cloning VM: $_"
             }
-            Wait-ForUser
         }
 
         "3" {
             # 3. Disconnect vNIC
-            if (-not (Test-VCenterConnection)) { continue }
+            if (-not $global:DefaultVIServer) {
+                Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)."
+                continue
+            }
 
-            Write-Host "Disconnecting vNIC..." -ForegroundColor Yellow
+            Write-Host "Disconnecting vNIC..."
             $vmName = Read-Host "Please enter the name of the VM to configure"
 
             try {
                 $vm = Get-VM -Name $vmName -ErrorAction Stop
                 $nic = Get-NetworkAdapter -VM $vm -ErrorAction Stop
                 Get-NetworkAdapter -VM $vm | Set-NetworkAdapter -NetworkName "VDI_Terceros_2067" -StartConnected:$false -Confirm:$false -ErrorAction Stop
-                Write-Host "VM '$vmName' has been configured with VLAN 'VDI_Terceros_2067' and disconnected network adapter." -ForegroundColor Green
+                Write-Host "VM '$vmName' has been configured with VLAN 'VDI_Terceros_2067' and disconnected network adapter."
             }
             catch {
-                Write-Host "Error disconnecting vNIC: $_" -ForegroundColor Red
+                Write-Host "Error disconnecting vNIC: $_"
             }
-            Wait-ForUser
         }
 
         "4" {
             # 4. Connect vNIC
-            if (-not (Test-VCenterConnection)) { continue }
+            if (-not $global:DefaultVIServer) {
+                Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)."
+                continue
+            }
 
-            Write-Host "Connecting vNIC..." -ForegroundColor Yellow
+            Write-Host "Connecting vNIC..."
             $vmName = Read-Host "Please enter the name of the VM to configure"
 
             try {
@@ -116,84 +97,84 @@ while ($continue) {
                 Get-NetworkAdapter -VM $vm | Set-NetworkAdapter -Connected:$true -Confirm:$false -ErrorAction Stop
                 $updatedAdapter = Get-NetworkAdapter -VM $vm
                 if ($updatedAdapter.ConnectionState.Connected) {
-                    Write-Host "Success: vNIC for VM '$vmName' is now connected to VLAN '$($updatedAdapter.NetworkName)'." -ForegroundColor Green
+                    Write-Host "Success: vNIC for VM '$vmName' is now connected to VLAN '$($updatedAdapter.NetworkName)'."
                 }
                 else {
-                    Write-Host "Error: vNIC for VM '$vmName' is still disconnected." -ForegroundColor Red
+                    Write-Host "Error: vNIC for VM '$vmName' is still disconnected."
                 }
             }
             catch {
-                Write-Host "Error connecting vNIC: $_" -ForegroundColor Red
+                Write-Host "Error connecting vNIC: $_"
             }
-            Wait-ForUser
         }
 
         "5" {
             # 5. Rename Computer
-            if (-not (Test-VCenterConnection)) { continue }
+            if (-not $global:DefaultVIServer) {
+                Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)."
+                continue
+            }
 
-            Write-Host "Renaming computer..." -ForegroundColor Yellow
+            Write-Host "Renaming computer..."
             $vmName = Read-Host "Please enter the name of the VM to configure"
 
             try {
                 $vm = Get-VM -Name $vmName -ErrorAction Stop
 
                 # Construct the local admin username in the format vmname\ctxadmin
-                $username = "$vmName\ctxadmin"
+                $username = ".\ctxadmin"
                 $password = "Banorte2020."
                 $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
                 $guestCredential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
 
-                $newComputerName = Read-Host "Please enter the new computer name for VM '$vmName'"
-                $workgroupName = Read-Host "Please enter the workgroup name for the VM (e.g., WORKGROUP)"
-
+                $newComputerName = $vmName
+                
                 if ($vm.PowerState -ne "PoweredOn") {
-                    Write-Host "Powering on VM '$vmName'..." -ForegroundColor Yellow
+                    Write-Host "Powering on VM '$vmName'..."
                     Start-VM -VM $vm -Confirm:$false
-                    Write-Host "Waiting for VM to boot up..." -ForegroundColor Yellow
                     Start-Sleep -Seconds 60
                 }
 
                 $guestScript = @"
                 Remove-Computer -Force -PassThru
-                Add-Computer -WorkgroupName "$workgroupName" -Force
                 Rename-Computer -NewName "$newComputerName" -Force
                 Write-Output "Computer name set to $newComputerName and joined workgroup $workgroupName. Rebooting now..."
                 Restart-Computer -Force
 "@
 
-                Write-Host "Applying computer name and workgroup changes to VM '$vmName'..." -ForegroundColor Yellow
+                Write-Host "Applying computer name and workgroup changes to VM '$vmName'..."
                 $result = Invoke-VMScript -VM $vm -ScriptText $guestScript -GuestCredential $guestCredential -ScriptType PowerShell -ErrorAction Stop
-                Write-Host "Script output: $($result.ScriptOutput)" -ForegroundColor Cyan
-                Write-Host "VM '$vmName' has been configured with the new computer name '$newComputerName' and workgroup '$workgroupName'. The VM is rebooting to apply changes." -ForegroundColor Green
-                Write-Host "Note: The computer object for '$vmName' may still exist in Active Directory. Please manually remove it from the domain to avoid stale entries." -ForegroundColor Yellow
+                Write-Host "Script output: $($result.ScriptOutput)"
+                Write-Host "VM '$vmName' has been configured with the new computer name '$newComputerName'. The VM is rebooting to apply changes."
+                Write-Host "Note: The computer object for '$vmName' may still exist in Active Directory. Please manually remove it from the domain to avoid stale entries."
             }
             catch {
-                Write-Host "Error renaming computer: $_" -ForegroundColor Red
+                Write-Host "Error renaming computer: $_"
             }
-            Wait-ForUser
         }
 
         "6" {
             # 6. Set Password for CtxAdmin2
-            if (-not (Test-VCenterConnection)) { continue }
+            if (-not $global:DefaultVIServer) {
+                Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)."
+                continue
+            }
 
-            Write-Host "Setting password for ctxadmin2..." -ForegroundColor Yellow
+            Write-Host "Setting password for ctxadmin2..."
             $vmName = Read-Host "Please enter the name of the VM to configure"
 
             try {
                 $vm = Get-VM -Name $vmName -ErrorAction Stop
 
                 # Construct the local admin username in the format vmname\ctxadmin
-                $username = "$vmName\ctxadmin"
+                $username = ".\ctxadmin"
                 $password = "Banorte2020."
                 $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
                 $guestCredential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
 
                 if ($vm.PowerState -ne "PoweredOn") {
-                    Write-Host "Powering on VM '$vmName'..." -ForegroundColor Yellow
+                    Write-Host "Powering on VM '$vmName'..."
                     Start-VM -VM $vm -Confirm:$false
-                    Write-Host "Waiting for VM to boot up..." -ForegroundColor Yellow
                     Start-Sleep -Seconds 60
                 }
 
@@ -215,44 +196,43 @@ while ($continue) {
                 }
 "@
 
-                Write-Host "Changing password for ctxadmin2 on VM '$vmName'..." -ForegroundColor Yellow
+                Write-Host "Changing password for ctxadmin2 on VM '$vmName'..."
                 $result = Invoke-VMScript -VM $vm -ScriptText $guestScript -GuestCredential $guestCredential -ScriptType PowerShell -ErrorAction Stop
-                Write-Host "Script output: $($result.ScriptOutput)" -ForegroundColor Cyan
-                Write-Host "Password change completed for user ctxadmin2 on VM '$vmName'." -ForegroundColor Green
+                Write-Host "Script output: $($result.ScriptOutput)"
+                Write-Host "Password change completed for user ctxadmin2 on VM '$vmName'."
             }
             catch {
-                Write-Host "Error setting password for ctxadmin2: $_" -ForegroundColor Red
+                Write-Host "Error setting password for ctxadmin2: $_"
             }
-            Wait-ForUser
         }
 
         "7" {
             # 7. Start VM
-            if (-not (Test-VCenterConnection)) { continue }
+            if (-not $global:DefaultVIServer) {
+                Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)."
+                continue
+            }
 
-            Write-Host "Starting VM..." -ForegroundColor Yellow
+            Write-Host "Starting VM..."
             $vmName = Read-Host "Please enter the name of the VM to start"
 
             try {
-                $vm = Get-VM -Name $vmName -ErrorAction Stop
-                if ($vm.PowerState -eq "PoweredOn") {
-                    Write-Host "VM '$vmName' is already powered on." -ForegroundColor Yellow
-                } else {
-                    Start-VM -VM $vm -Confirm:$false -ErrorAction Stop
-                    Write-Host "VM '$vmName' has been started." -ForegroundColor Green
-                }
+                Start-VM -VM $vmName -Confirm:$false -ErrorAction Stop
+                Write-Host "VM '$vmName' has been started."
             }
             catch {
-                Write-Host "Error starting VM: $_" -ForegroundColor Red
+                Write-Host "Error starting VM: $_"
             }
-            Wait-ForUser
         }
 
         "8" {
             # 8. Extend Partition
-            if (-not (Test-VCenterConnection)) { continue }
+            if (-not $global:DefaultVIServer) {
+                Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)."
+                continue
+            }
 
-            Write-Host "Extending partition using diskpart..." -ForegroundColor Yellow
+            Write-Host "Extending partition using diskpart..."
             $vmName = Read-Host "Please enter the name of the VM to configure"
 
             try {
@@ -265,9 +245,8 @@ while ($continue) {
                 $guestCredential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
 
                 if ($vm.PowerState -ne "PoweredOn") {
-                    Write-Host "Powering on VM '$vmName'..." -ForegroundColor Yellow
+                    Write-Host "Powering on VM '$vmName'..."
                     Start-VM -VM $vm -Confirm:$false
-                    Write-Host "Waiting for VM to boot up..." -ForegroundColor Yellow
                     Start-Sleep -Seconds 60
                 }
 
@@ -310,27 +289,95 @@ catch {
 }
 "@
 
-                Write-Host "Running diskpart to extend partition on VM '$vmName'..." -ForegroundColor Yellow
+                Write-Host "Running diskpart to extend partition on VM '$vmName'..."
                 $result = Invoke-VMScript -VM $vm -ScriptText $guestScript -GuestCredential $guestCredential -ScriptType PowerShell -ErrorAction Stop
-                Write-Host "Script output: $($result.ScriptOutput)" -ForegroundColor Cyan
-                Write-Host "Partition extension completed for VM '$vmName'." -ForegroundColor Green
+                Write-Host "Script output: $($result.ScriptOutput)"
+                Write-Host "Partition extension completed for VM '$vmName'."
             }
             catch {
-                Write-Host "Error extending partition: $_" -ForegroundColor Red
+                Write-Host "Error extending partition: $_"
             }
-            Wait-ForUser
         }
 
         "9" {
-            # 9. Quit
-            Write-Host "Exiting script..." -ForegroundColor Yellow
+            # 9. Create Local User ugsop_vdiha
+            if (-not $global:DefaultVIServer) {
+                Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)."
+                continue
+            }
+
+            Write-Host "Creating local user ugsop_vdiha..."
+            $vmName = Read-Host "Please enter the name of the VM to configure"
+
+            try {
+                $vm = Get-VM -Name $vmName -ErrorAction Stop
+
+                # Construct the local admin username for authentication
+                $username = ".\ctxadmin"
+                $password = "Banorte2020."
+                $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+                $guestCredential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+
+                if ($vm.PowerState -ne "PoweredOn") {
+                    Write-Host "Powering on VM '$vmName'..."
+                    Start-VM -VM $vm -Confirm:$false
+                    Start-Sleep -Seconds 60
+                }
+
+                $newUsername = "ugsop_vdiha"
+                $newPassword = "VNTB4n0rt3B4n0rt3"
+                $groupName = "Administradores"
+
+                $guestScript = @"
+                try {
+                    # Check if the user already exists
+                    if (-not (Get-LocalUser -Name '$newUsername' -ErrorAction SilentlyContinue)) {
+                        # Create a new local user
+                        New-LocalUser -Name '$newUsername' -Password (ConvertTo-SecureString '$newPassword' -AsPlainText -Force) -FullName 'VDI HA User' -Description 'Local admin account for VDI HA'
+                        Write-Output 'User $newUsername created successfully.'
+                        # Add a slight delay to ensure the user is fully committed
+                        Start-Sleep -Seconds 2
+                    } else {
+                        Write-Output 'User $newUsername already exists.'
+                    }
+
+                    # Set the password to never expire (always apply, whether user is new or existing)
+                    Set-LocalUser -Name '$newUsername' -PasswordNeverExpires `$true
+                    Write-Output 'Password for $newUsername set to never expire.'
+
+                    # Add the user to the Administrators group
+                    if (-not (Get-LocalGroupMember -Group '$groupName' -Member '$newUsername' -ErrorAction SilentlyContinue)) {
+                        Add-LocalGroupMember -Group '$groupName' -Member '$newUsername'
+                        Write-Output 'User $newUsername added to the $groupName group.'
+                    } else {
+                        Write-Output 'User $newUsername is already a member of the $groupName group.'
+                    }
+                }
+                catch {
+                    Write-Output 'Error creating user, setting password to never expire, or adding to group: `$_'
+                    exit 1
+                }
+"@
+
+                Write-Host "Creating user $newUsername on VM '$vmName'..."
+                $result = Invoke-VMScript -VM $vm -ScriptText $guestScript -GuestCredential $guestCredential -ScriptType PowerShell -ErrorAction Stop
+                Write-Host "Script output: $($result.ScriptOutput)"
+                Write-Host "User creation completed for $newUsername on VM '$vmName'."
+            }
+            catch {
+                Write-Host "Error creating local user: $_"
+            }
+        }
+
+        "10" {
+            # 10. Quit
+            Write-Host "Exiting script..."
             $continue = $false
             continue
         }
 
         default {
-            Write-Host "Invalid option. Please select a number between 1 and 9." -ForegroundColor Red
-            Wait-ForUser
+            Write-Host "Invalid option. Please select a number between 1 and 10."
         }
     }
 }
@@ -338,5 +385,5 @@ catch {
 # Disconnect from vCenter if connected
 if ($global:DefaultVIServer) {
     Disconnect-VIServer -Server $global:DefaultVIServer -Confirm:$false
-    Write-Host "Disconnected from vCenter." -ForegroundColor Green
+    Write-Host "Disconnected from vCenter."
 }
