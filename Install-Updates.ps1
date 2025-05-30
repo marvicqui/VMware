@@ -477,4 +477,152 @@ function Update-Edge {
     for ($i = 0; $i -lt $servers.Count; $i++) {
         Write-Host "[$i] $($servers[$i].ServerName)"
     }
-    $selection = Read-Host "Enter the indices separated by commas (e.g., 0,2,3
+    $selection = Read-Host "Enter the indices separated by commas (e.g., 0,2,3) or type 'all' to update all servers"
+    
+    if ($selection -eq "all") {
+        $selectedServers = $servers
+    } else {
+        $indices = $selection -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "^\d+$" } | ForEach-Object { [int]$_ }
+        $selectedServers = @()
+        foreach ($i in $indices) {
+            if ($i -ge 0 -and $i -lt $servers.Count) {
+                $selectedServers += $servers[$i]
+            } else {
+                Write-Host "Index $i is out of range. Skipping..." -ForegroundColor Yellow
+            }
+        }
+    }
+    
+    # Look for Edge MSI files in the D:\Updates folder on each server
+    foreach ($server in $selectedServers) {
+        $serverName = $server.ServerName
+        Write-Host "Checking for Edge MSI on $serverName ..." -NoNewline
+        
+        try {
+            $updateResult = Invoke-Command -ComputerName $serverName -ScriptBlock {
+                $updateFolder = "D:\Updates"
+                
+                # Check if the updates folder exists
+                if (-not (Test-Path $updateFolder)) {
+                    return @{
+                        Status = "Error"
+                        Message = "Updates folder not found at D:\Updates"
+                    }
+                }
+                
+                # Find Edge MSI files
+                $edgeMsiFiles = Get-ChildItem -Path $updateFolder -Filter "*edge*.msi" -File
+                
+                if ($edgeMsiFiles.Count -eq 0) {
+                    return @{
+                        Status = "Error"
+                        Message = "No Edge MSI files found in D:\Updates"
+                    }
+                }
+                
+                # Find the newest Edge MSI file
+                $newestEdgeMsi = $edgeMsiFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+                
+                # Install Edge using the MSI
+                try {
+                    $installProcess = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$($newestEdgeMsi.FullName)`" /qn /norestart" -Wait -PassThru -NoNewWindow
+                    
+                    if ($installProcess.ExitCode -eq 0) {
+                        return @{
+                            Status = "Success"
+                            Message = "Edge successfully updated using $($newestEdgeMsi.Name)"
+                            ExitCode = $installProcess.ExitCode
+                        }
+                    } else {
+                        return @{
+                            Status = "Error"
+                            Message = "Edge installation failed"
+                            MsiFile = $newestEdgeMsi.Name
+                            ExitCode = $installProcess.ExitCode
+                        }
+                    }
+                } catch {
+                    return @{
+                        Status = "Error"
+                        Message = "Error executing MSI: $_"
+                        MsiFile = $newestEdgeMsi.Name
+                    }
+                }
+            }
+            
+            Write-Host ""  # New line after the "Checking..." message
+            
+            if ($updateResult.Status -eq "Success") {
+                Write-Host "$serverName : $($updateResult.Message)" -ForegroundColor Green
+            } else {
+                Write-Host "$serverName : $($updateResult.Message)" -ForegroundColor Red
+                if ($updateResult.ContainsKey("MsiFile")) {
+                    Write-Host "  MSI File: $($updateResult.MsiFile)" -ForegroundColor Yellow
+                }
+                if ($updateResult.ContainsKey("ExitCode")) {
+                    Write-Host "  Exit Code: $($updateResult.ExitCode)" -ForegroundColor Yellow
+                }
+            }
+            
+        } catch {
+            Write-Host ""  # New line after the "Checking..." message
+            Write-Host "$serverName : Failed to update Edge. $_" -ForegroundColor Red
+        }
+        
+        Write-Host "-----------------------------------------"
+    }
+}
+
+# --- Main Menu Loop ---
+do {
+    Write-Host ""
+    Write-Host "==================== MENU ====================" -ForegroundColor Green
+    Write-Host "1. Copy Updates Files"
+    Write-Host "2. Install Updates (Selected Servers)"
+    Write-Host "3. Check Updates Installation Status"
+    Write-Host "4. Enable and Start Windows Update Service"
+    Write-Host "5. Stop and Disable Windows Update Service"
+    Write-Host "6. Enable and Start WinRM Service (WMI)"
+    Write-Host "7. Stop and Disable WinRM Service (WMI)"
+    Write-Host "8. Reboot Selected Servers"
+    Write-Host "9. Check Server Status"
+    Write-Host "10. Check C: Drive Space"
+    Write-Host "11. Clean Old Security Logs (3+ months)"
+    Write-Host "12. Check Edge Version"
+    Write-Host "13. Update Edge"
+    Write-Host "14. Quit"
+    Write-Host "==============================================" -ForegroundColor Green
+    $choice = Read-Host "Enter your choice (1-14)"
+    
+    switch ($choice) {
+        "1" {
+            $sourceFolder = Read-Host "Enter the folder path containing the update files (e.g., D:\Updates)"
+            Copy-UpdatesFiles -sourceFolder $sourceFolder
+        }
+        "2" { Install-Updates-Selected }
+        "3" { Check-UpdatesInstallationStatus }
+        "4" { Enable-Start-Service -serviceName "wuauserv" }
+        "5" { Stop-Disable-Service -serviceName "wuauserv" }
+        "6" { Enable-Start-Service -serviceName "WinRM" }
+        "7" { Stop-Disable-Service -serviceName "WinRM" }
+        "8" { Reboot-SelectedServers }
+        "9" { Check-ServerStatus }
+        "10" { Check-CDriveSpace }
+        "11" { Remove-OldSecurityLogs }
+        "12" { Check-EdgeVersion }
+        "13" { Update-Edge }
+        "14" {
+            Write-Host "Exiting..."
+        }
+        default {
+            Write-Host "Invalid option. Please try again." -ForegroundColor Yellow
+        }
+    }
+
+    # Pause for the user to read the output before showing the menu again
+    if ($choice -ne "14") {
+        Read-Host "Press Enter to return to the menu..."
+    }
+
+} while ($choice -ne "14") 
+# --- END SCRIPT ---
