@@ -11,9 +11,10 @@ function Show-Menu {
     Write-Host "6. Configure Admin Users (ctxadmin2 & ugsop_vdiha)"
     Write-Host "7. Start VM"
     Write-Host "8. Extend Partition"
-    Write-Host "9. Quit"
+    Write-Host "9. Snipping Tools Installation"
+    Write-Host "10. Quit"
     Write-Host "=================================="
-    $choice = Read-Host "Please select an option (1-9)"
+    $choice = Read-Host "Please select an option (1-10)"
     return $choice
 }
 
@@ -332,14 +333,126 @@ catch {
         }
 
         "9" {
-            # 9. Quit
+            # 9. Snipping Tools Installation
+            if (-not $global:DefaultVIServer) {
+                Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)."
+                continue
+            }
+
+            Write-Host "Installing Snipping Tool and dependencies..."
+            $vmName = Read-Host "Please enter the name of the VM to configure"
+
+            try {
+                $vm = Get-VM -Name $vmName -ErrorAction Stop
+
+                # Construct the local admin username for authentication
+                $username = ".\ctxadmin"
+                $password = "Banorte2020."
+                $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+                $guestCredential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+
+                if ($vm.PowerState -ne "PoweredOn") {
+                    Write-Host "Powering on VM '$vmName'..."
+                    Start-VM -VM $vm -Confirm:$false
+                    Start-Sleep -Seconds 60
+                }
+
+                # This script block will run inside the guest VM
+                $guestScript = @"
+                `$ErrorActionPreference = 'Stop'
+                `$basePath = 'C:\Temporal\recorte'
+
+                Write-Output 'Starting installation of Snipping Tool and dependencies...'
+                Write-Output "Searching for files in: `$basePath"
+
+                # Check if base directory exists
+                if (-not (Test-Path -Path `$basePath -PathType Container)) {
+                    Write-Output "FATAL: Directory `$basePath does not exist on the VM. Aborting."
+                    exit 1
+                }
+
+                # List of required packages in order of installation
+                `$packages = @(
+                    'Microsoft.WindowsAppRuntime.1.5_5001.275.500.0_Universal_X64.msix',
+                    'Microsoft.UI.Xaml.2.8_8.2310.30001.0_Universal_X64.appx',
+                    'Microsoft.VCLibs.140.00_14.0.33519.0_Universal_X64.appx',
+                    'Microsoft.VCLibs.140.00.UWPDesktop_14.0.33728.0_Universal_X64.appx',
+                    'Microsoft.ScreenSketch_2022.2407.3.0_Desktop_Arm64.X64.msixbundle'
+                )
+
+                # Install each package
+                foreach (`$pkgFile in `$packages) {
+                    `$fullPath = Join-Path -Path `$basePath -ChildPath `$pkgFile
+                    Write-Output "---"
+                    Write-Output "Attempting to install: `$pkgFile"
+
+                    if (-not (Test-Path `$fullPath -PathType Leaf)) {
+                        Write-Output "ERROR: File not found - `$fullPath"
+                        continue # Skip to the next file
+                    }
+
+                    try {
+                        Add-AppxPackage -Path `$fullPath
+                        Write-Output "SUCCESS: Installed `$pkgFile"
+                    } catch {
+                        Write-Output "ERROR: Failed to install `$pkgFile. Details: `$_.Exception.Message"
+                    }
+                }
+
+                # Provision the main package for all users
+                Write-Output '---'
+                Write-Output "Attempting to provision Screen Sketch package..."
+                `$screenSketchPath = Join-Path -Path `$basePath -ChildPath 'Microsoft.ScreenSketch_2022.2407.3.0_Desktop_Arm64.X64.msixbundle'
+                if (Test-Path `$screenSketchPath -PathType Leaf) {
+                    try {
+                        Add-AppxProvisionedPackage -Online -PackagePath `$screenSketchPath -SkipLicense
+                        Write-Output 'SUCCESS: Screen Sketch provisioned for all new users.'
+                    } catch {
+                        Write-Output "ERROR: Failed to provision Screen Sketch. Details: `$_.Exception.Message"
+                    }
+                } else {
+                    Write-Output "ERROR: Screen Sketch package not found for provisioning."
+                }
+
+                # Disable the scheduled task
+                Write-Output '---'
+                Write-Output 'Attempting to disable PcaWallpaperAppDetect scheduled task...'
+                try {
+                    Disable-ScheduledTask -TaskPath '\Microsoft\Windows\Application Experience\' -TaskName 'PcaWallpaperAppDetect'
+                    Write-Output 'SUCCESS: Scheduled task "PcaWallpaperAppDetect" disabled.'
+                } catch {
+                    if (`$_.Exception.Message -like '*The system cannot find the file specified*') {
+                        Write-Output 'INFO: Scheduled task "PcaWallpaperAppDetect" not found. No action needed.'
+                    } else {
+                        Write-Output "ERROR: Failed to disable scheduled task. Details: `$_.Exception.Message"
+                    }
+                }
+
+                Write-Output '---'
+                Write-Output 'Installation script finished.'
+"@
+
+                Write-Host "Running Snipping Tool installation script on VM '$vmName'..."
+                $result = Invoke-VMScript -VM $vm -ScriptText $guestScript -GuestCredential $guestCredential -ScriptType PowerShell -ErrorAction Stop
+                Write-Host "Guest script output:"
+                # Format the output from the guest
+                $result.ScriptOutput.Split([Environment]::NewLine) | ForEach-Object { Write-Host "  $_" }
+                Write-Host "Snipping Tool installation process completed on VM '$vmName'."
+            }
+            catch {
+                Write-Host "An error occurred during the Snipping Tool installation process: $_"
+            }
+        }
+
+        "10" {
+            # 10. Quit
             Write-Host "Exiting script..."
             $continue = $false
             continue
         }
 
         default {
-            Write-Host "Invalid option. Please select a number between 1 and 9."
+            Write-Host "Invalid option. Please select a number between 1 and 10."
         }
     }
 }
