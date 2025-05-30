@@ -8,13 +8,12 @@ function Show-Menu {
     Write-Host "3. Disconnect vNIC"
     Write-Host "4. Connect vNIC"
     Write-Host "5. Rename Computer"
-    Write-Host "6. Set Password for CtxAdmin2"
+    Write-Host "6. Configure Admin Users (ctxadmin2 & ugsop_vdiha)"
     Write-Host "7. Start VM"
     Write-Host "8. Extend Partition"
-    Write-Host "9. Create Local User ugsop_vdiha"
-    Write-Host "10. Quit"
+    Write-Host "9. Quit"
     Write-Host "=================================="
-    $choice = Read-Host "Please select an option (1-10)"
+    $choice = Read-Host "Please select an option (1-9)"
     return $choice
 }
 
@@ -154,19 +153,19 @@ while ($continue) {
         }
 
         "6" {
-            # 6. Set Password for CtxAdmin2
+            # 6. Configure Admin Users (ctxadmin2 & ugsop_vdiha)
             if (-not $global:DefaultVIServer) {
                 Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)."
                 continue
             }
 
-            Write-Host "Setting password for ctxadmin2..."
+            Write-Host "Configuring admin users..."
             $vmName = Read-Host "Please enter the name of the VM to configure"
 
             try {
                 $vm = Get-VM -Name $vmName -ErrorAction Stop
 
-                # Construct the local admin username in the format vmname\ctxadmin
+                # Construct the local admin username for authentication
                 $username = ".\ctxadmin"
                 $password = "Banorte2020."
                 $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
@@ -178,31 +177,64 @@ while ($continue) {
                     Start-Sleep -Seconds 60
                 }
 
-                $newPassword = "VNTB4n0rt3B4n0rt3"
+                # Define passwords and usernames
+                $ctxadmin2Password = "VNTB4n0rt3B4n0rt3"
+                $ugsopUsername = "ugsop_vdiha"
+                $ugsopPassword = "VNTB4n0rt3B4n0rt3"
+                $adminGroupName = "Administradores"
+
+                # Combined guest script
                 $guestScript = @"
+                # Task 1: Set password for ctxadmin2
                 try {
-                    `$user = [ADSI]('WinNT://./ctxadmin2,user')
-                    if (`$user -eq `$null) {
-                        Write-Output 'Error: User ctxadmin2 not found.'
-                        exit 1
+                    `$user2 = [ADSI]('WinNT://./ctxadmin2,user')
+                    if (`$user2 -eq `$null) {
+                        Write-Output 'Info: User ctxadmin2 not found. Skipping password change.'
                     }
-                    `$user.SetPassword('$newPassword')
-                    `$user.SetInfo()
-                    Write-Output 'Password for ctxadmin2 changed successfully.'
+                    else {
+                        `$user2.SetPassword('$ctxadmin2Password')
+                        `$user2.SetInfo()
+                        Write-Output 'Password for ctxadmin2 changed successfully.'
+                    }
                 }
                 catch {
                     Write-Output 'Error changing password for ctxadmin2: `$_'
-                    exit 1
+                }
+
+                # Task 2: Create and configure ugsop_vdiha
+                try {
+                    # Check if the user already exists
+                    if (-not (Get-LocalUser -Name '$ugsopUsername' -ErrorAction SilentlyContinue)) {
+                        New-LocalUser -Name '$ugsopUsername' -Password (ConvertTo-SecureString '$ugsopPassword' -AsPlainText -Force) -FullName 'VDI HA User' -Description 'Local admin account for VDI HA'
+                        Write-Output 'User $ugsopUsername created successfully.'
+                        Start-Sleep -Seconds 2
+                    } else {
+                        Write-Output 'User $ugsopUsername already exists.'
+                    }
+
+                    # Configure user
+                    Set-LocalUser -Name '$ugsopUsername' -PasswordNeverExpires `$true
+                    Write-Output 'Password for $ugsopUsername set to never expire.'
+
+                    if (-not (Get-LocalGroupMember -Group '$adminGroupName' -Member '$ugsopUsername' -ErrorAction SilentlyContinue)) {
+                        Add-LocalGroupMember -Group '$adminGroupName' -Member '$ugsopUsername'
+                        Write-Output 'User $ugsopUsername added to the $adminGroupName group.'
+                    } else {
+                        Write-Output 'User $ugsopUsername is already a member of the $adminGroupName group.'
+                    }
+                }
+                catch {
+                    Write-Output 'Error processing user ugsop_vdiha: `$_'
                 }
 "@
 
-                Write-Host "Changing password for ctxadmin2 on VM '$vmName'..."
+                Write-Host "Running user configuration script on VM '$vmName'..."
                 $result = Invoke-VMScript -VM $vm -ScriptText $guestScript -GuestCredential $guestCredential -ScriptType PowerShell -ErrorAction Stop
                 Write-Host "Script output: $($result.ScriptOutput)"
-                Write-Host "Password change completed for user ctxadmin2 on VM '$vmName'."
+                Write-Host "User configuration completed on VM '$vmName'."
             }
             catch {
-                Write-Host "Error setting password for ctxadmin2: $_"
+                Write-Host "Error configuring users: $_"
             }
         }
 
@@ -300,84 +332,14 @@ catch {
         }
 
         "9" {
-            # 9. Create Local User ugsop_vdiha
-            if (-not $global:DefaultVIServer) {
-                Write-Host "Error: Not connected to a vCenter Server. Please connect first (option 1)."
-                continue
-            }
-
-            Write-Host "Creating local user ugsop_vdiha..."
-            $vmName = Read-Host "Please enter the name of the VM to configure"
-
-            try {
-                $vm = Get-VM -Name $vmName -ErrorAction Stop
-
-                # Construct the local admin username for authentication
-                $username = ".\ctxadmin"
-                $password = "Banorte2020."
-                $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
-                $guestCredential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
-
-                if ($vm.PowerState -ne "PoweredOn") {
-                    Write-Host "Powering on VM '$vmName'..."
-                    Start-VM -VM $vm -Confirm:$false
-                    Start-Sleep -Seconds 60
-                }
-
-                $newUsername = "ugsop_vdiha"
-                $newPassword = "VNTB4n0rt3B4n0rt3"
-                $groupName = "Administradores"
-
-                $guestScript = @"
-                try {
-                    # Check if the user already exists
-                    if (-not (Get-LocalUser -Name '$newUsername' -ErrorAction SilentlyContinue)) {
-                        # Create a new local user
-                        New-LocalUser -Name '$newUsername' -Password (ConvertTo-SecureString '$newPassword' -AsPlainText -Force) -FullName 'VDI HA User' -Description 'Local admin account for VDI HA'
-                        Write-Output 'User $newUsername created successfully.'
-                        # Add a slight delay to ensure the user is fully committed
-                        Start-Sleep -Seconds 2
-                    } else {
-                        Write-Output 'User $newUsername already exists.'
-                    }
-
-                    # Set the password to never expire (always apply, whether user is new or existing)
-                    Set-LocalUser -Name '$newUsername' -PasswordNeverExpires `$true
-                    Write-Output 'Password for $newUsername set to never expire.'
-
-                    # Add the user to the Administrators group
-                    if (-not (Get-LocalGroupMember -Group '$groupName' -Member '$newUsername' -ErrorAction SilentlyContinue)) {
-                        Add-LocalGroupMember -Group '$groupName' -Member '$newUsername'
-                        Write-Output 'User $newUsername added to the $groupName group.'
-                    } else {
-                        Write-Output 'User $newUsername is already a member of the $groupName group.'
-                    }
-                }
-                catch {
-                    Write-Output 'Error creating user, setting password to never expire, or adding to group: `$_'
-                    exit 1
-                }
-"@
-
-                Write-Host "Creating user $newUsername on VM '$vmName'..."
-                $result = Invoke-VMScript -VM $vm -ScriptText $guestScript -GuestCredential $guestCredential -ScriptType PowerShell -ErrorAction Stop
-                Write-Host "Script output: $($result.ScriptOutput)"
-                Write-Host "User creation completed for $newUsername on VM '$vmName'."
-            }
-            catch {
-                Write-Host "Error creating local user: $_"
-            }
-        }
-
-        "10" {
-            # 10. Quit
+            # 9. Quit
             Write-Host "Exiting script..."
             $continue = $false
             continue
         }
 
         default {
-            Write-Host "Invalid option. Please select a number between 1 and 10."
+            Write-Host "Invalid option. Please select a number between 1 and 9."
         }
     }
 }
